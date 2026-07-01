@@ -250,7 +250,7 @@
     <div class="wd-headerrow">
       <div class="wd-badgerow">
         <div class="wd-badge">
-          <div class="n">178</div>
+          <div class="n" id="wd-bw-badge">178</div>
           <div class="u">LB WALK-AROUND</div>
         </div>
         <div class="wd-badge streak">
@@ -287,7 +287,44 @@
 
   <!-- NUTRITION -->
   <div class="wd-section">
-    <div class="wd-h2">Daily Nutrition Targets</div>
+    <div class="wd-h2" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Daily Nutrition Targets</span>
+      <button class="wd-btn ghost" id="wd-goals-toggle" style="padding:6px 12px;font-size:10.5px;">Edit My Targets</button>
+    </div>
+
+    <div class="wd-logform" id="wd-goals-form" style="display:none;margin-bottom:16px;">
+      <div class="grid">
+        <div class="wd-field">
+          <label>Calorie Target</label>
+          <input type="number" id="goal-calories" placeholder="4300">
+        </div>
+        <div class="wd-field">
+          <label>Protein Target (g)</label>
+          <input type="number" id="goal-protein" placeholder="205">
+        </div>
+        <div class="wd-field">
+          <label>Carb Target (g)</label>
+          <input type="number" id="goal-carbs" placeholder="620">
+        </div>
+        <div class="wd-field">
+          <label>Fat Target (g)</label>
+          <input type="number" id="goal-fat" placeholder="105">
+        </div>
+        <div class="wd-field">
+          <label>Water Target (oz)</label>
+          <input type="number" id="goal-water" placeholder="144">
+        </div>
+        <div class="wd-field">
+          <label>Walk-Around Weight (lb)</label>
+          <input type="number" step="0.1" id="goal-bodyweight" placeholder="178">
+        </div>
+      </div>
+      <div class="wd-savebar">
+        <button class="wd-btn" id="wd-goals-save">Save My Targets</button>
+        <span class="wd-savemsg" id="wd-goalsmsg"></span>
+      </div>
+    </div>
+
     <div class="wd-nutri-grid" id="wd-nutri"></div>
 
     <div class="wd-h2" style="margin-top:4px;">Log Today</div>
@@ -425,6 +462,7 @@
       document.getElementById('wd-content').style.display = 'block';
       document.getElementById('wd-userinfo').style.display = 'flex';
       document.getElementById('wd-username').textContent = user.displayName || user.email;
+      loadGoals();
       loadToday();
       renderHistory();
       updateStreak();
@@ -524,35 +562,49 @@
   }
   renderDay(0);
 
-  // NUTRITION TARGETS
-  const targets = [
-    {key:'calories', label:'Calories', value:'4,300', target:4300, unit:'kcal', sub:'Adjust ±200 if bodyweight isn\'t trending up after 2 weeks'},
-    {key:'protein', label:'Protein', value:'205', target:205, unit:'g', sub:'~1.15 g/lb — matches roughly what you\'re already doing'},
-    {key:null, label:'Carbs', value:'620', unit:'g', sub:'High on purpose — fuels 9 sessions/week'},
-    {key:null, label:'Fat', value:'105', unit:'g', sub:'Remainder of calories, keep it here'},
-    {key:'water', label:'Water', value:'128–160', target:144, unit:'oz', sub:'Top of range on double-session or hot mat-room days'},
-    {key:null, label:'Creatine', value:'5–10', unit:'g', sub:'5 g fully saturates most people — 10 g is fine but not necessary'}
+  // NUTRITION TARGETS — defaults, overridden per-user by saved goals
+  const defaultGoals = { calories:4300, protein:205, carbs:620, fat:105, water:144, bodyweight:178 };
+  let currentGoals = Object.assign({}, defaultGoals);
+
+  const targetMeta = [
+    {key:'calories', label:'Calories', unit:'kcal', sub:'Adjust ±200 if bodyweight isn\'t trending up after 2 weeks', track:true},
+    {key:'protein', label:'Protein', unit:'g', sub:'~1.15 g/lb is a solid starting point', track:true},
+    {key:'carbs', label:'Carbs', unit:'g', sub:'High on purpose — fuels 9 sessions/week', track:false},
+    {key:'fat', label:'Fat', unit:'g', sub:'Remainder of calories, keep it here', track:false},
+    {key:'water', label:'Water', unit:'oz', sub:'Push toward the top on double-session or hot mat-room days', track:true}
   ];
   const nutriEl = document.getElementById('wd-nutri');
-  targets.forEach(t=>{
-    const c = document.createElement('div');
-    c.className='wd-nutri-card';
-    let track = '';
-    if(t.key){
-      track = `<div class="track"><div class="fill" id="fill-${t.key}"></div></div><div class="sub" id="logged-${t.key}">Not logged yet today</div>`;
-    }
-    c.innerHTML = `<div class="label">${t.label}</div><div class="value">${t.value}<span>${t.unit}</span></div><div class="sub">${t.sub}</div>${track}`;
-    nutriEl.appendChild(c);
-  });
+
+  function renderNutriCards(){
+    nutriEl.innerHTML = '';
+    targetMeta.forEach(t=>{
+      const c = document.createElement('div');
+      c.className='wd-nutri-card';
+      let track = '';
+      if(t.track){
+        track = `<div class="track"><div class="fill" id="fill-${t.key}"></div></div><div class="sub" id="logged-${t.key}">Not logged yet today</div>`;
+      }
+      c.innerHTML = `<div class="label">${t.label}</div><div class="value">${currentGoals[t.key]}<span>${t.unit}</span></div><div class="sub">${t.sub}</div>${track}`;
+      nutriEl.appendChild(c);
+    });
+    const creatineCard = document.createElement('div');
+    creatineCard.className = 'wd-nutri-card';
+    creatineCard.innerHTML = `<div class="label">Creatine</div><div class="value">5–10<span>g</span></div><div class="sub">5 g fully saturates most people — 10 g is fine but not necessary</div>`;
+    nutriEl.appendChild(creatineCard);
+    document.getElementById('wd-bw-badge').textContent = currentGoals.bodyweight;
+  }
+  renderNutriCards();
+
   function updateNutriProgress(entry){
-    targets.forEach(t=>{
-      if(!t.key) return;
+    targetMeta.forEach(t=>{
+      if(!t.track) return;
       const fillEl = document.getElementById('fill-'+t.key);
       const loggedEl = document.getElementById('logged-'+t.key);
       const val = entry ? parseFloat(entry[t.key]) : NaN;
+      const goal = currentGoals[t.key];
       if(fillEl && loggedEl){
         if(!isNaN(val) && val>0){
-          const pct = Math.min(100, Math.round((val/t.target)*100));
+          const pct = Math.min(100, Math.round((val/goal)*100));
           fillEl.style.width = pct+'%';
           loggedEl.textContent = `Logged: ${val} ${t.unit} (${pct}% of target)`;
         } else {
@@ -562,6 +614,60 @@
       }
     });
   }
+
+  // GOALS — per-user, stored at users/{uid}/meta/settings
+  function settingsRef(){
+    return db.collection('users').doc(currentUser.uid).collection('meta').doc('settings');
+  }
+
+  document.getElementById('wd-goals-toggle').addEventListener('click', ()=>{
+    const form = document.getElementById('wd-goals-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  });
+
+  async function loadGoals(){
+    try{
+      const doc = await settingsRef().get();
+      if(doc.exists){
+        const v = doc.data();
+        currentGoals = Object.assign({}, defaultGoals, v);
+      } else {
+        currentGoals = Object.assign({}, defaultGoals);
+      }
+    }catch(e){
+      console.error('loadGoals failed', e);
+      currentGoals = Object.assign({}, defaultGoals);
+    }
+    renderNutriCards();
+    document.getElementById('goal-calories').value = currentGoals.calories;
+    document.getElementById('goal-protein').value = currentGoals.protein;
+    document.getElementById('goal-carbs').value = currentGoals.carbs;
+    document.getElementById('goal-fat').value = currentGoals.fat;
+    document.getElementById('goal-water').value = currentGoals.water;
+    document.getElementById('goal-bodyweight').value = currentGoals.bodyweight;
+  }
+
+  document.getElementById('wd-goals-save').addEventListener('click', async ()=>{
+    const msg = document.getElementById('wd-goalsmsg');
+    const newGoals = {
+      calories: Number(document.getElementById('goal-calories').value) || defaultGoals.calories,
+      protein: Number(document.getElementById('goal-protein').value) || defaultGoals.protein,
+      carbs: Number(document.getElementById('goal-carbs').value) || defaultGoals.carbs,
+      fat: Number(document.getElementById('goal-fat').value) || defaultGoals.fat,
+      water: Number(document.getElementById('goal-water').value) || defaultGoals.water,
+      bodyweight: Number(document.getElementById('goal-bodyweight').value) || defaultGoals.bodyweight
+    };
+    try{
+      await settingsRef().set(newGoals);
+      currentGoals = newGoals;
+      renderNutriCards();
+      msg.textContent = 'Saved.';
+      setTimeout(()=>msg.textContent='',2000);
+      loadToday(); // refresh progress bars against the new targets
+    }catch(e){
+      msg.textContent = "Didn't save — check your connection.";
+    }
+  });
 
   // LOGGING
   function dateStr(offset){
