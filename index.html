@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Offseason Build — Wrestling Strength Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --bg:#1B1917;
+    --surface:#242220;
+    --surface2:#2D2A27;
+    --maroon:#A32B22;
+    --maroon-bright:#C63A2C;
+    --gold:#C9A227;
+    --gold-soft:#E4C766;
+    --ink:#F3EEE4;
+    --ink-muted:#B3A99C;
+    --ink-faint:#7C7367;
+    --green:#7E9B6E;
+    --line:#3A3631;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  .wd-root{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    padding:0;
+    min-height:100%;
+    line-height:1.45;
+  }
+  .wd-eyebrow{
+    font-family:'Oswald',sans-serif;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:11px;
+    color:var(--gold-soft);
+    font-weight:500;
+  }
+  .wd-h1{
+    font-family:'Oswald',sans-serif;
+    text-transform:uppercase;
+    font-weight:700;
+    letter-spacing:.02em;
+    font-size:clamp(28px,5vw,42px);
+    margin:2px 0 0 0;
+    color:var(--ink);
+  }
+  .wd-h2{
+    font-family:'Oswald',sans-serif;
+    text-transform:uppercase;
+    font-weight:600;
+    letter-spacing:.06em;
+    font-size:15px;
+    color:var(--gold-soft);
+    margin:0 0 10px 0;
+  }
+  .wd-header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    flex-wrap:wrap;gap:16px;
+    padding:22px 22px 18px 22px;
+    border-bottom:1px solid var(--line);
+  }
+  .wd-badge{
+    width:78px;height:78px;border-radius:50%;
+    border:3px solid var(--gold);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    background:radial-gradient(circle at 35% 30%, #322D26, #201D1A);
+    flex-shrink:0;
+  }
+  .wd-badge .n{font-size:18px;font-weight:700;color:var(--gold-soft);line-height:1;}
+  .wd-badge .u{font-size:8px;color:var(--ink-faint);letter-spacing:.08em;margin-top:2px;}
+  .wd-badge.streak{border-color:var(--maroon-bright);}
+  .wd-badge.streak .n{color:#fff;}
+  .wd-badgerow{display:flex;gap:12px;}
+
+  /* Coach card */
+  .wd-coach{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;
+  }
+  .wd-coach .d{font-size:12.5px;color:var(--ink-muted);margin-bottom:12px;}
+  .wd-coach-out{
+    margin-top:14px;padding:12px 14px;background:var(--bg);border:1px solid var(--line);
+    border-radius:8px;font-size:13.5px;color:var(--ink);line-height:1.55;display:none;
+  }
+  .wd-coach-out.show{display:block;}
+  .wd-coach-loading{color:var(--ink-faint);font-size:12.5px;font-style:italic;display:none;}
+  .wd-coach-loading.show{display:block;}
+  .wd-coach-err{color:var(--maroon-bright);font-size:12.5px;display:none;}
+  .wd-coach-err.show{display:block;}
+
+  .wd-btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-muted);}
+  .wd-btn.ghost:hover{background:var(--surface2);border-color:var(--gold);color:var(--ink);}
+
+  /* Auth gate */
+  .wd-authgate{
+    padding:70px 22px;text-align:center;
+  }
+  .wd-authgate .d{color:var(--ink-muted);font-size:13.5px;max-width:420px;margin:10px auto 22px auto;}
+  .wd-userinfo{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-muted);}
+  .wd-userinfo .name{color:var(--ink);}
+  .wd-headerrow{display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
+  .wd-autherr{color:var(--maroon-bright);font-size:12.5px;margin-top:12px;display:none;}
+  .wd-autherr.show{display:block;}
+  .wd-syncmsg{font-size:11.5px;color:var(--ink-faint);margin-top:8px;}
+
+  .wd-section{padding:20px 22px;border-bottom:1px solid var(--line);}
+
+  /* Weekly mat-circle strip */
+  .wd-week{display:flex;gap:10px;flex-wrap:wrap;}
+  .wd-day{
+    flex:1 1 90px;min-width:88px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:12px 10px;
+    cursor:pointer;
+    text-align:center;
+    transition:border-color .15s, transform .15s;
+  }
+  .wd-day:hover{border-color:var(--gold);transform:translateY(-2px);}
+  .wd-day.active{border-color:var(--gold);background:var(--surface2);}
+  .wd-day .dow{font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:.08em;color:var(--ink-muted);text-transform:uppercase;}
+  .wd-day .mat{
+    width:40px;height:40px;border-radius:50%;margin:8px auto 6px auto;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+    position:relative;
+  }
+  .wd-day .mat.both{background:conic-gradient(var(--maroon-bright) 0 50%, var(--gold) 50% 100%);color:var(--bg);}
+  .wd-day .mat.wrestle{background:var(--maroon-bright);color:#fff;}
+  .wd-day .mat.lift{background:var(--gold);color:#201D1A;}
+  .wd-day .mat.rest{background:transparent;border:1.5px dashed var(--ink-faint);color:var(--ink-faint);}
+  .wd-day .tag{font-size:10px;color:var(--ink-faint);font-family:'Inter',sans-serif;}
+
+  /* Day detail */
+  .wd-daycard{display:none;}
+  .wd-daycard.show{display:block;}
+  .wd-focus{
+    font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+    font-size:20px;color:var(--ink);margin-bottom:2px;
+  }
+  .wd-focus-sub{color:var(--ink-muted);font-size:13px;margin-bottom:14px;}
+  table.wd-ex{width:100%;border-collapse:collapse;font-size:13.5px;}
+  table.wd-ex th{
+    text-align:left;font-family:'Oswald',sans-serif;text-transform:uppercase;
+    font-size:11px;letter-spacing:.05em;color:var(--ink-faint);
+    padding:6px 8px;border-bottom:1px solid var(--line);
+  }
+  table.wd-ex td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;}
+  table.wd-ex tr:last-child td{border-bottom:none;}
+  .wd-ex .name{color:var(--ink);font-weight:500;}
+  .wd-ex .load{font-family:'JetBrains Mono',monospace;color:var(--gold-soft);white-space:nowrap;}
+  .wd-ex .note{color:var(--ink-muted);font-size:12px;}
+  .wd-restnote{color:var(--ink-muted);font-size:13.5px;}
+
+  /* Nutrition cards */
+  .wd-nutri-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:12px;margin-bottom:18px;
+  }
+  .wd-nutri-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;
+  }
+  .wd-nutri-card .label{
+    font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:11px;
+    letter-spacing:.06em;color:var(--ink-faint);margin-bottom:6px;
+  }
+  .wd-nutri-card .value{
+    font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--gold-soft);
+    line-height:1;
+  }
+  .wd-nutri-card .value span{font-size:12px;color:var(--ink-faint);font-weight:400;margin-left:3px;}
+  .wd-nutri-card .track{height:5px;background:var(--surface2);border-radius:4px;margin-top:10px;overflow:hidden;}
+  .wd-nutri-card .fill{height:100%;background:var(--maroon-bright);border-radius:4px;width:0%;transition:width .3s;}
+  .wd-nutri-card .sub{font-size:11.5px;color:var(--ink-muted);margin-top:6px;}
+
+  /* Log form */
+  .wd-logform{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;
+  }
+  .wd-logform .grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;
+  }
+  .wd-field label{
+    display:block;font-family:'Oswald',sans-serif;text-transform:uppercase;
+    font-size:10.5px;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:5px;
+  }
+  .wd-field input[type=number], .wd-field input[type=text]{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    padding:8px 9px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;
+  }
+  .wd-field input:focus{outline:none;border-color:var(--gold);}
+  .wd-check{display:flex;align-items:center;gap:8px;margin-top:6px;}
+  .wd-check label{font-family:'Inter',sans-serif;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);}
+  .wd-check input{width:16px;height:16px;accent-color:var(--maroon-bright);}
+  .wd-savebar{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;}
+  .wd-btn{
+    background:var(--maroon-bright);color:#fff;border:none;border-radius:7px;
+    padding:10px 18px;font-family:'Oswald',sans-serif;text-transform:uppercase;
+    letter-spacing:.05em;font-size:12.5px;font-weight:600;cursor:pointer;
+  }
+  .wd-btn:hover{background:var(--maroon);}
+  .wd-savemsg{font-size:12px;color:var(--green);font-family:'Inter',sans-serif;}
+
+  /* History */
+  .wd-history{margin-top:16px;}
+  .wd-history table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .wd-history th{
+    text-align:left;font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:10.5px;
+    letter-spacing:.05em;color:var(--ink-faint);padding:6px 8px;border-bottom:1px solid var(--line);
+  }
+  .wd-history td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;color:var(--ink-muted);}
+  .wd-history td.dowcell{font-family:'Inter',sans-serif;color:var(--ink);}
+  .wd-empty{color:var(--ink-faint);font-size:12.5px;font-style:italic;padding:10px 0;}
+
+  .wd-recgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+  .wd-reccard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
+  .wd-reccard .t{font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:12.5px;letter-spacing:.04em;color:var(--gold-soft);margin-bottom:5px;}
+  .wd-reccard .d{font-size:12.5px;color:var(--ink-muted);}
+
+  .wd-footnote{padding:16px 22px 26px 22px;color:var(--ink-faint);font-size:11.5px;}
+
+  @media (max-width:520px){
+    .wd-header{padding:16px;}
+    .wd-section{padding:16px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wd-root">
+
+  <div class="wd-header">
+    <div>
+      <div class="wd-eyebrow">Elite Wrestling · Offseason Strength Block</div>
+      <div class="wd-h1">Build Phase</div>
+    </div>
+    <div class="wd-headerrow">
+      <div class="wd-badgerow">
+        <div class="wd-badge">
+          <div class="n">178</div>
+          <div class="u">LB WALK-AROUND</div>
+        </div>
+        <div class="wd-badge streak">
+          <div class="n" id="wd-streak-n">0</div>
+          <div class="u">DAY STREAK</div>
+        </div>
+      </div>
+      <div class="wd-userinfo" id="wd-userinfo" style="display:none;">
+        <span>Synced as <span class="name" id="wd-username"></span></span>
+        <button class="wd-btn ghost" id="wd-signout" style="padding:5px 10px;font-size:10.5px;">Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTH GATE -->
+  <div class="wd-authgate" id="wd-authgate">
+    <div class="wd-h2" style="justify-content:center;">Sign In To Sync</div>
+    <div class="d">Sign in with Google to save your log and sync it between your Mac and iPhone. Your data is private to your account.</div>
+    <button class="wd-btn" id="wd-google-signin">Sign in with Google</button>
+    <div class="wd-autherr" id="wd-autherr"></div>
+  </div>
+
+  <!-- MAIN CONTENT (hidden until signed in) -->
+  <div id="wd-content" style="display:none;">
+
+  <!-- WEEKLY MAT STRIP -->
+  <div class="wd-section">
+    <div class="wd-h2">This Week</div>
+    <div class="wd-week" id="wd-week"></div>
+  </div>
+
+  <!-- DAY DETAIL -->
+  <div class="wd-section" id="wd-daydetail"></div>
+
+  <!-- NUTRITION -->
+  <div class="wd-section">
+    <div class="wd-h2">Daily Nutrition Targets</div>
+    <div class="wd-nutri-grid" id="wd-nutri"></div>
+
+    <div class="wd-h2" style="margin-top:4px;">Log Today</div>
+    <div class="wd-logform">
+      <div class="grid">
+        <div class="wd-field">
+          <label>Bodyweight (lb)</label>
+          <input type="number" step="0.1" id="in-bw" placeholder="178.0">
+        </div>
+        <div class="wd-field">
+          <label>Calories</label>
+          <input type="number" id="in-calories" placeholder="4300">
+        </div>
+        <div class="wd-field">
+          <label>Protein (g)</label>
+          <input type="number" id="in-protein" placeholder="205">
+        </div>
+        <div class="wd-field">
+          <label>Water (oz)</label>
+          <input type="number" id="in-water" placeholder="140">
+        </div>
+        <div class="wd-field">
+          <label>Sleep (hrs)</label>
+          <input type="number" step="0.5" id="in-sleep" placeholder="8.5">
+        </div>
+        <div class="wd-field">
+          <label>Creatine (g)</label>
+          <input type="number" id="in-creatine" placeholder="10">
+        </div>
+      </div>
+      <div class="grid" style="margin-top:12px;">
+        <div class="wd-field" style="grid-column:span 2;">
+          <label>Today's main lift (top set)</label>
+          <input type="text" id="in-mainlift" placeholder="e.g. Back Squat 315x4">
+        </div>
+      </div>
+      <div class="grid" style="margin-top:12px;">
+        <div class="wd-check"><input type="checkbox" id="in-lift"><label for="in-lift">Lifted today</label></div>
+        <div class="wd-check"><input type="checkbox" id="in-wrestle"><label for="in-wrestle">Wrestled today</label></div>
+        <div class="wd-check"><input type="checkbox" id="in-mobility"><label for="in-mobility">Mobility/neck work done</label></div>
+      </div>
+      <div class="wd-field" style="margin-top:12px;">
+        <label>Notes (soreness, energy, weight cut, etc.)</label>
+        <input type="text" id="in-notes" placeholder="e.g. hips tight, felt flat in live go">
+      </div>
+      <div class="wd-savebar">
+        <button class="wd-btn" id="wd-save">Save Today's Log</button>
+        <button class="wd-btn ghost" id="wd-copy">Copy for Notebook</button>
+        <span class="wd-savemsg" id="wd-savemsg"></span>
+      </div>
+      <div class="wd-syncmsg">Synced to your Google account — same log on any device you sign into.</div>
+    </div>
+
+    <div class="wd-history">
+      <div class="wd-h2" style="margin-top:6px;">Last 7 Entries</div>
+      <div id="wd-history-body"></div>
+    </div>
+  </div>
+
+  <!-- COACH -->
+  <div class="wd-section">
+    <div class="wd-h2">Coach Check-In</div>
+    <div class="wd-coach">
+      <div class="d">Reads your last few logged days (soreness notes, sleep, bodyweight trend, lift/wrestle load) and gives short, practical feedback. Not a doctor or a replacement for your S&C/wrestling coach — if something sounds like an injury, it'll tell you to get it looked at.</div>
+      <div class="wd-field" style="margin-bottom:10px;">
+        <label>Your Anthropic API key</label>
+        <input type="password" id="in-apikey" placeholder="sk-ant-...">
+      </div>
+      <div class="wd-check" style="margin-bottom:12px;">
+        <input type="checkbox" id="in-apikey-remember">
+        <label for="in-apikey-remember">Remember on this device (stored only in this browser — don't check this on a shared computer)</label>
+      </div>
+      <button class="wd-btn" id="wd-coach-btn">Get Feedback</button>
+      <div class="wd-coach-loading" id="wd-coach-loading">Reading your last few days...</div>
+      <div class="wd-coach-err" id="wd-coach-err"></div>
+      <div class="wd-coach-out" id="wd-coach-out"></div>
+    </div>
+  </div>
+
+  <!-- RECOVERY -->
+  <div class="wd-section">
+    <div class="wd-h2">Recovery Rules</div>
+    <div class="wd-recgrid">
+      <div class="wd-reccard"><div class="t">Sleep</div><div class="d">8–9 hrs/night, non-negotiable at this training volume. This is the biggest lever you control.</div></div>
+      <div class="wd-reccard"><div class="t">Deload</div><div class="d">Every 4th week: cut lifting sets ~40%, keep intensity moderate. Let wrestling stay the priority that week.</div></div>
+      <div class="wd-reccard"><div class="t">Daily Mobility</div><div class="d">10 min hips, shoulders, neck before or after practice — wrestling stance beats up hip flexors and groin.</div></div>
+      <div class="wd-reccard"><div class="t">Session Spacing</div><div class="d">Leave 3+ hrs between lifting and wrestling. Fuel with carbs in between, don't lift on an empty tank.</div></div>
+      <div class="wd-reccard"><div class="t">Full Rest</div><div class="d">Sunday off completely. Saturday is optional light pump/mobility, not mandatory.</div></div>
+      <div class="wd-reccard"><div class="t">Overreach Signal</div><div class="d">If soreness/fatigue stacks up, cut lifting accessory volume first. Wrestling stays intact — that's the sport.</div></div>
+    </div>
+  </div>
+
+  </div>
+  <!-- END MAIN CONTENT -->
+
+  <div class="wd-footnote">Data logged here syncs privately to your Google account via Firebase — only you can see it. Not a substitute for guidance from your S&C coach, wrestling coach, or a sports dietitian, especially around weight-class management.</div>
+</div>
+
+<script>
+(function(){
+  const firebaseConfig = {
+    apiKey: "AIzaSyC37CjUwlnnc7Qp16zkTuUeAgUv44jcLOo",
+    authDomain: "wrestling-dashboard.firebaseapp.com",
+    databaseURL: "https://wrestling-dashboard-default-rtdb.firebaseio.com",
+    projectId: "wrestling-dashboard",
+    storageBucket: "wrestling-dashboard.firebasestorage.app",
+    messagingSenderId: "228519308860",
+    appId: "1:228519308860:web:f7e1b1afe568322b0a9d39"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  let currentUser = null;
+
+  function userLogsCol(){
+    return db.collection('users').doc(currentUser.uid).collection('logs');
+  }
+
+  document.getElementById('wd-google-signin').addEventListener('click', ()=>{
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const errEl = document.getElementById('wd-autherr');
+    errEl.classList.remove('show');
+    auth.signInWithPopup(provider).catch(err=>{
+      errEl.textContent = 'Sign-in failed: ' + err.message;
+      errEl.classList.add('show');
+    });
+  });
+
+  document.getElementById('wd-signout').addEventListener('click', ()=> auth.signOut());
+
+  auth.onAuthStateChanged(user=>{
+    currentUser = user;
+    if(user){
+      document.getElementById('wd-authgate').style.display = 'none';
+      document.getElementById('wd-content').style.display = 'block';
+      document.getElementById('wd-userinfo').style.display = 'flex';
+      document.getElementById('wd-username').textContent = user.displayName || user.email;
+      loadToday();
+      renderHistory();
+      updateStreak();
+    } else {
+      document.getElementById('wd-authgate').style.display = 'block';
+      document.getElementById('wd-content').style.display = 'none';
+      document.getElementById('wd-userinfo').style.display = 'none';
+    }
+  });
+
+  const days = [
+    {dow:'MON', kind:'both', tag:'Lower · Strength', focus:'Lower Body — Strength', sub:'Heaviest squat day of the week. Full recovery from the weekend.',
+      ex:[
+        ['Back Squat','5 × 3–5','80–87% 1RM · RPE 8','Reset each rep, brace hard'],
+        ['Romanian Deadlift','4 × 6','RPE 7–8','Control the eccentric, hamstring stretch'],
+        ['Bulgarian Split Squat (DB)','3 × 8/leg','Moderate','Rear foot elevated, torso upright'],
+        ['Barbell Hip Thrust','3 × 10','RPE 7',''],
+        ['Weighted Neck Work','3 × 15','Light','Bridge or harness, all 4 directions'],
+        ['Hanging Knee Raise','3 × 12–15','Bodyweight','Control, no swinging']
+      ]},
+    {dow:'TUE', kind:'both', tag:'Upper · Strength', focus:'Upper Body — Strength', sub:'Main pressing/pulling strength day.',
+      ex:[
+        ['Bench Press','5 × 3–5','80–87% 1RM · RPE 8',''],
+        ['Weighted Pull-Up','4 × 6','Add load if bodyweight is easy',''],
+        ['Standing Overhead Press','4 × 6','RPE 7–8',''],
+        ['Barbell Row','3 × 8','RPE 7','Chest to bar path, control'],
+        ['DB Rear Delt Fly','3 × 12','Light','Shoulder health, slow tempo'],
+        ['Farmer Carry','3 × 40 yd','Heavy','Grip + trap work, wrestling carryover']
+      ]},
+    {dow:'WED', kind:'wrestle', tag:'Wrestling only', focus:'No Lift — Wrestling Only', sub:'Recovery day for the weight room. Let practice be practice.',
+      ex:null, restnote:'Skip lifting today. Prioritize technique work, extra mobility, and getting ahead on food/sleep. This gap is what makes Thursday and Friday productive.'},
+    {dow:'THU', kind:'both', tag:'Lower · Volume', focus:'Lower Body — Hypertrophy', sub:'Lighter CNS load, higher volume. Mid-week fatigue is expected — earn the pump, not a PR.',
+      ex:[
+        ['Front Squat or Trap Bar Deadlift','4 × 6–8','RPE 7','Pick whichever felt fresher this week'],
+        ['Walking Lunges (DB)','3 × 10/leg','Moderate',''],
+        ['Single-Leg RDL (DB)','3 × 8/leg','Light–moderate','Balance + hamstring'],
+        ['DB Step-Ups','3 × 10/leg','Moderate','Box or bench height'],
+        ['Weighted Neck Work','3 × 15','Light',''],
+        ['Landmine Rotation','3 × 10/side','Light','Rotational core, wrestling-specific']
+      ]},
+    {dow:'FRI', kind:'both', tag:'Upper · Power', focus:'Upper Body — Power & Hypertrophy', sub:'Close the week strong, then two full rest/light days follow.',
+      ex:[
+        ['Push Press','4 × 5','Explosive','Drive from the legs'],
+        ['Incline DB Bench Press','4 × 8','RPE 7–8',''],
+        ['Chin-Ups (weighted if possible)','3 × 8','',''],
+        ['DB Arnold Press','3 × 10','Light–moderate',''],
+        ['DB Curl + Close-Grip Floor Press','3 × 10 each','Superset',''],
+        ['Plate Pinch Hold','3 × 30 sec','Heavy','Grip endurance']
+      ]},
+    {dow:'SAT', kind:'lift', tag:'Optional light', focus:'Optional — Light Pump / Mobility', sub:'Not mandatory. Use it if you feel good and recovery has been on point.',
+      ex:null, restnote:'If you use this day: 20–30 min, light dumbbell full-body pump, no maxing out, plus 15 min mobility. If you\'re beat up, skip it — this is a bonus day, not a requirement.'},
+    {dow:'SUN', kind:'rest', tag:'Full rest', focus:'Full Rest', sub:'No lifting, no wrestling.', ex:null,
+      restnote:'Complete rest day. Sleep in, eat well, get ahead on meal prep for the week. This is where the week\'s work actually turns into muscle.'}
+  ];
+
+  const weekEl = document.getElementById('wd-week');
+  const detailEl = document.getElementById('wd-daydetail');
+
+  function matClass(kind){
+    if(kind==='both') return 'mat both';
+    if(kind==='wrestle') return 'mat wrestle';
+    if(kind==='lift') return 'mat lift';
+    return 'mat rest';
+  }
+  function matLabel(kind){
+    if(kind==='both') return 'W+L';
+    if(kind==='wrestle') return 'W';
+    if(kind==='lift') return 'L';
+    return '—';
+  }
+
+  days.forEach((d,i)=>{
+    const cell = document.createElement('div');
+    cell.className = 'wd-day' + (i===0?' active':'');
+    cell.innerHTML = `<div class="dow">${d.dow}</div><div class="${matClass(d.kind)}">${matLabel(d.kind)}</div><div class="tag">${d.tag}</div>`;
+    cell.addEventListener('click',()=>{
+      document.querySelectorAll('.wd-day').forEach(c=>c.classList.remove('active'));
+      cell.classList.add('active');
+      renderDay(i);
+    });
+    weekEl.appendChild(cell);
+  });
+
+  function renderDay(i){
+    const d = days[i];
+    let html = `<div class="wd-focus">${d.focus}</div><div class="wd-focus-sub">${d.sub}</div>`;
+    if(d.ex){
+      html += `<table class="wd-ex"><thead><tr><th>Exercise</th><th>Sets × Reps</th><th>Load / RPE</th><th>Notes</th></tr></thead><tbody>`;
+      d.ex.forEach(row=>{
+        html += `<tr><td class="name">${row[0]}</td><td class="load">${row[1]}</td><td class="load">${row[2]}</td><td class="note">${row[3]}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    } else {
+      html += `<div class="wd-restnote">${d.restnote}</div>`;
+    }
+    detailEl.innerHTML = html;
+  }
+  renderDay(0);
+
+  // NUTRITION TARGETS
+  const targets = [
+    {key:'calories', label:'Calories', value:'4,300', target:4300, unit:'kcal', sub:'Adjust ±200 if bodyweight isn\'t trending up after 2 weeks'},
+    {key:'protein', label:'Protein', value:'205', target:205, unit:'g', sub:'~1.15 g/lb — matches roughly what you\'re already doing'},
+    {key:null, label:'Carbs', value:'620', unit:'g', sub:'High on purpose — fuels 9 sessions/week'},
+    {key:null, label:'Fat', value:'105', unit:'g', sub:'Remainder of calories, keep it here'},
+    {key:'water', label:'Water', value:'128–160', target:144, unit:'oz', sub:'Top of range on double-session or hot mat-room days'},
+    {key:null, label:'Creatine', value:'5–10', unit:'g', sub:'5 g fully saturates most people — 10 g is fine but not necessary'}
+  ];
+  const nutriEl = document.getElementById('wd-nutri');
+  targets.forEach(t=>{
+    const c = document.createElement('div');
+    c.className='wd-nutri-card';
+    let track = '';
+    if(t.key){
+      track = `<div class="track"><div class="fill" id="fill-${t.key}"></div></div><div class="sub" id="logged-${t.key}">Not logged yet today</div>`;
+    }
+    c.innerHTML = `<div class="label">${t.label}</div><div class="value">${t.value}<span>${t.unit}</span></div><div class="sub">${t.sub}</div>${track}`;
+    nutriEl.appendChild(c);
+  });
+  function updateNutriProgress(entry){
+    targets.forEach(t=>{
+      if(!t.key) return;
+      const fillEl = document.getElementById('fill-'+t.key);
+      const loggedEl = document.getElementById('logged-'+t.key);
+      const val = entry ? parseFloat(entry[t.key]) : NaN;
+      if(fillEl && loggedEl){
+        if(!isNaN(val) && val>0){
+          const pct = Math.min(100, Math.round((val/t.target)*100));
+          fillEl.style.width = pct+'%';
+          loggedEl.textContent = `Logged: ${val} ${t.unit} (${pct}% of target)`;
+        } else {
+          fillEl.style.width = '0%';
+          loggedEl.textContent = 'Not logged yet today';
+        }
+      }
+    });
+  }
+
+  // LOGGING
+  function dateStr(offset){
+    const d = new Date();
+    if(offset) d.setDate(d.getDate()+offset);
+    return d.toISOString().slice(0,10);
+  }
+
+  document.getElementById('wd-copy').addEventListener('click', async ()=>{
+    const lines = [
+      `Date: ${new Date().toISOString().slice(0,10)}`,
+      `Bodyweight: ${document.getElementById('in-bw').value || '—'} lb`,
+      `Calories: ${document.getElementById('in-calories').value || '—'}`,
+      `Protein: ${document.getElementById('in-protein').value || '—'} g`,
+      `Water: ${document.getElementById('in-water').value || '—'} oz`,
+      `Sleep: ${document.getElementById('in-sleep').value || '—'} hrs`,
+      `Creatine: ${document.getElementById('in-creatine').value || '—'} g`,
+      `Main lift: ${document.getElementById('in-mainlift').value || '—'}`,
+      `Lifted: ${document.getElementById('in-lift').checked ? 'yes' : 'no'}`,
+      `Wrestled: ${document.getElementById('in-wrestle').checked ? 'yes' : 'no'}`,
+      `Mobility done: ${document.getElementById('in-mobility').checked ? 'yes' : 'no'}`,
+      `Notes: ${document.getElementById('in-notes').value || '—'}`
+    ];
+    const text = lines.join('\\n');
+    const msg = document.getElementById('wd-savemsg');
+    try{
+      await navigator.clipboard.writeText(text);
+      msg.textContent = 'Copied — paste into your notebook.';
+      setTimeout(()=>msg.textContent='',3000);
+    }catch(e){
+      window.prompt('Copy failed — select and copy manually:', text);
+    }
+  });
+
+  async function loadToday(){
+    try{
+      const doc = await userLogsCol().doc(dateStr(0)).get();
+      if(doc.exists){
+        const v = doc.data();
+        document.getElementById('in-bw').value = v.bw ?? '';
+        document.getElementById('in-calories').value = v.calories ?? '';
+        document.getElementById('in-protein').value = v.protein ?? '';
+        document.getElementById('in-water').value = v.water ?? '';
+        document.getElementById('in-sleep').value = v.sleep ?? '';
+        document.getElementById('in-creatine').value = v.creatine ?? '';
+        document.getElementById('in-mainlift').value = v.mainlift ?? '';
+        document.getElementById('in-lift').checked = !!v.lift;
+        document.getElementById('in-wrestle').checked = !!v.wrestle;
+        document.getElementById('in-mobility').checked = !!v.mobility;
+        document.getElementById('in-notes').value = v.notes ?? '';
+        updateNutriProgress(v);
+      } else {
+        updateNutriProgress(null);
+      }
+    }catch(e){ console.error('loadToday failed', e); updateNutriProgress(null); }
+  }
+
+  async function saveToday(){
+    const entry = {
+      bw: document.getElementById('in-bw').value,
+      calories: document.getElementById('in-calories').value,
+      protein: document.getElementById('in-protein').value,
+      water: document.getElementById('in-water').value,
+      sleep: document.getElementById('in-sleep').value,
+      creatine: document.getElementById('in-creatine').value,
+      mainlift: document.getElementById('in-mainlift').value,
+      lift: document.getElementById('in-lift').checked,
+      wrestle: document.getElementById('in-wrestle').checked,
+      mobility: document.getElementById('in-mobility').checked,
+      notes: document.getElementById('in-notes').value
+    };
+    const msg = document.getElementById('wd-savemsg');
+    try{
+      await userLogsCol().doc(dateStr(0)).set(entry);
+      msg.textContent = 'Saved — synced.';
+      setTimeout(()=>msg.textContent='',2000);
+      updateNutriProgress(entry);
+      renderHistory();
+      updateStreak();
+    }catch(e){
+      console.error('saveToday failed', e);
+      msg.textContent = "Didn't save — check your connection. Use Copy for Notebook as backup.";
+    }
+  }
+
+  document.getElementById('wd-save').addEventListener('click', saveToday);
+
+  async function renderHistory(){
+    const body = document.getElementById('wd-history-body');
+    const rows = [];
+    for(let i=0;i>-7;i--){
+      try{
+        const doc = await userLogsCol().doc(dateStr(i)).get();
+        if(doc.exists){
+          const v = doc.data();
+          const d = new Date();
+          d.setDate(d.getDate()+i);
+          rows.push({date:d, v});
+        }
+      }catch(e){ /* skip missing days */ }
+    }
+    if(rows.length===0){
+      body.innerHTML = '<div class="wd-empty">No entries yet — log today above to start your history.</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Day</th><th>BW</th><th>Cals</th><th>Protein</th><th>Water</th><th>Main Lift</th><th>Lift</th><th>Wrestle</th></tr></thead><tbody>';
+    rows.forEach(r=>{
+      const dow = r.date.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+      html += `<tr><td class="dowcell">${dow}</td><td>${r.v.bw||'—'}</td><td>${r.v.calories||'—'}</td><td>${r.v.protein||'—'}</td><td>${r.v.water||'—'}</td><td class="dowcell">${r.v.mainlift||'—'}</td><td>${r.v.lift?'✓':'—'}</td><td>${r.v.wrestle?'✓':'—'}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  }
+
+  // STREAK — consecutive days (working back from today) where lift or wrestle was logged
+  async function updateStreak(){
+    let streak = 0;
+    for(let i=0;i>-365;i--){
+      try{
+        const doc = await userLogsCol().doc(dateStr(i)).get();
+        if(doc.exists){
+          const v = doc.data();
+          if(v.lift || v.wrestle){ streak++; continue; }
+        }
+        break;
+      }catch(e){ break; }
+    }
+    document.getElementById('wd-streak-n').textContent = streak;
+  }
+
+  // COACH — sends recent logs to Claude for short, practical feedback
+  async function getCoachFeedback(){
+    const btn = document.getElementById('wd-coach-btn');
+    const loading = document.getElementById('wd-coach-loading');
+    const out = document.getElementById('wd-coach-out');
+    const err = document.getElementById('wd-coach-err');
+    out.classList.remove('show'); err.classList.remove('show');
+    loading.classList.add('show');
+    btn.disabled = true;
+
+    const recent = [];
+    for(let i=0;i>-5;i--){
+      try{
+        const doc = await userLogsCol().doc(dateStr(i)).get();
+        if(doc.exists){
+          const v = doc.data();
+          const d = new Date(); d.setDate(d.getDate()+i);
+          recent.push(`${d.toISOString().slice(0,10)}: bw=${v.bw||'—'} sleep=${v.sleep||'—'}hrs lift=${v.lift?'yes':'no'} wrestle=${v.wrestle?'yes':'no'} mainlift="${v.mainlift||'—'}" notes="${v.notes||'none'}"`);
+        }
+      }catch(e){}
+    }
+
+    if(recent.length===0){
+      const bw = document.getElementById('in-bw').value;
+      const sleep = document.getElementById('in-sleep').value;
+      const lift = document.getElementById('in-lift').checked;
+      const wrestle = document.getElementById('in-wrestle').checked;
+      const mainlift = document.getElementById('in-mainlift').value;
+      const notes = document.getElementById('in-notes').value;
+      if(bw || sleep || mainlift || notes){
+        recent.push(`today (no saved history — read live from the form): bw=${bw||'—'} sleep=${sleep||'—'}hrs lift=${lift?'yes':'no'} wrestle=${wrestle?'yes':'no'} mainlift="${mainlift||'—'}" notes="${notes||'none'}"`);
+      } else {
+        loading.classList.remove('show');
+        btn.disabled = false;
+        err.textContent = 'Fill in today\'s log above first — the coach needs something to look at.';
+        err.classList.add('show');
+        return;
+      }
+    }
+
+    const apiKey = document.getElementById('in-apikey').value.trim();
+    const remember = document.getElementById('in-apikey-remember').checked;
+    if(remember && apiKey){
+      localStorage.setItem('wd-apikey', apiKey);
+    } else if(!remember){
+      localStorage.removeItem('wd-apikey');
+    }
+    if(!apiKey){
+      loading.classList.remove('show');
+      btn.disabled = false;
+      err.textContent = 'Paste your Anthropic API key above first (get one at console.anthropic.com).';
+      err.classList.add('show');
+      return;
+    }
+
+    const systemPrompt = `You are a blunt, practical strength & conditioning coach for a college-level wrestler in an offseason muscle/strength block (lifting 4x/week, wrestling 5x/week). You'll get a few days of their logged bodyweight, sleep, training completion, main lift, and free-text notes. Give feedback in 3-5 short sentences: call out any real pattern (missed sleep, skipped sessions, notes suggesting overreach or injury), and one concrete thing to do about it. If a note sounds like it could be an injury (sharp pain, joint instability, numbness) rather than normal soreness, clearly say to get it checked by a trainer/doctor instead of giving a workaround. No fluff, no generic pep talk, no markdown formatting.`;
+
+    try{
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 400,
+          system: systemPrompt,
+          messages: [{ role: "user", content: "Here are my last logged days:\\n" + recent.join("\\n") }]
+        })
+      });
+      const data = await response.json();
+      if(!response.ok){
+        throw new Error((data && data.error && data.error.message) || ('HTTP ' + response.status));
+      }
+      const text = (data.content || []).map(b=>b.text||'').join('\\n').trim();
+      loading.classList.remove('show');
+      btn.disabled = false;
+      if(text){
+        out.textContent = text;
+        out.classList.add('show');
+      } else {
+        err.textContent = 'No response came back — try again in a moment.';
+        err.classList.add('show');
+      }
+    }catch(e){
+      loading.classList.remove('show');
+      btn.disabled = false;
+      err.textContent = 'Could not reach the coach: ' + e.message;
+      err.classList.add('show');
+    }
+  }
+  document.getElementById('wd-coach-btn').addEventListener('click', getCoachFeedback);
+
+  // Prefill remembered API key, if any
+  const rememberedKey = localStorage.getItem('wd-apikey');
+  if(rememberedKey){
+    document.getElementById('in-apikey').value = rememberedKey;
+    document.getElementById('in-apikey-remember').checked = true;
+  }
+})();
+</script>
+</body>
+</html>
