@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
 <style>
   :root{
@@ -276,6 +277,17 @@
   }
   .wd-challenge-history td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;color:var(--ink-muted);}
   .wd-challenge-history td.labelcell{font-family:'Inter',sans-serif;color:var(--ink);}
+  .wd-rowbtn{
+    background:none;border:1px solid var(--line);color:var(--ink-faint);
+    border-radius:5px;padding:3px 8px;font-size:10.5px;font-family:'Inter',sans-serif;
+    cursor:pointer;margin-right:4px;
+  }
+  .wd-rowbtn:hover{border-color:var(--gold);color:var(--ink);}
+  .wd-rowbtn.danger:hover{border-color:var(--maroon-bright);color:var(--maroon-bright);}
+  .wd-challenge-history input[type=date], .wd-challenge-history input[type=number]{
+    background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:5px;
+    padding:4px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;width:100px;
+  }
 
   @media (max-width:520px){
     .wd-header{padding:16px;}
@@ -500,11 +512,16 @@
     </div>
 
     <div class="wd-challenge-history">
-      <div class="wd-h2" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Logged Entries</span>
-        <button class="wd-btn ghost" id="cp-export" style="padding:6px 12px;font-size:10.5px;">Export CSV</button>
+      <div class="wd-h2" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span id="cp-history-toggle" style="cursor:pointer;">▸ Logged Entries (<span id="cp-count">0</span>)</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="wd-btn ghost" id="cp-import-btn" style="padding:6px 12px;font-size:10.5px;">Import CSV</button>
+          <input type="file" id="cp-import-file" accept=".csv" style="display:none;">
+          <button class="wd-btn ghost" id="cp-export" style="padding:6px 12px;font-size:10.5px;">Export CSV</button>
+        </div>
       </div>
-      <div id="cp-history-body"></div>
+      <div class="wd-syncmsg" id="cp-import-msg"></div>
+      <div id="cp-history-body" style="display:none;"></div>
     </div>
   </div>
 
@@ -1102,17 +1119,68 @@
 
   function renderChallengeHistory(){
     const body = document.getElementById('cp-history-body');
+    document.getElementById('cp-count').textContent = cachedChallengeEntries.length;
     if(cachedChallengeEntries.length===0){
       body.innerHTML = '<div class="wd-empty">No entries yet — log something above to get started.</div>';
       return;
     }
-    let html = '<table><thead><tr><th>Date</th><th>Activity</th><th>Points</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Date</th><th>Activity</th><th>Points</th><th></th></tr></thead><tbody>';
     cachedChallengeEntries.forEach(e=>{
-      html += `<tr><td>${e.date||'—'}</td><td class="labelcell">${e.label||e.type||'—'}</td><td>${e.points||0}</td></tr>`;
+      html += `<tr data-id="${e.id}">
+        <td class="cell-date">${e.date||'—'}</td>
+        <td class="labelcell">${e.label||e.type||'—'}</td>
+        <td class="cell-points">${e.points||0}</td>
+        <td>
+          <button class="wd-rowbtn edit-btn">Edit</button>
+          <button class="wd-rowbtn danger delete-btn">Delete</button>
+        </td>
+      </tr>`;
     });
     html += '</tbody></table>';
     body.innerHTML = html;
+
+    body.querySelectorAll('.delete-btn').forEach(btn=>{
+      btn.addEventListener('click', async (ev)=>{
+        const id = ev.target.closest('tr').dataset.id;
+        if(!confirm('Delete this entry?')) return;
+        try{
+          await challengeCol().doc(id).delete();
+          loadChallengeData();
+        }catch(e){ alert("Couldn't delete — check your connection."); }
+      });
+    });
+
+    body.querySelectorAll('.edit-btn').forEach(btn=>{
+      btn.addEventListener('click', (ev)=>{
+        const tr = ev.target.closest('tr');
+        const id = tr.dataset.id;
+        const entry = cachedChallengeEntries.find(e=>e.id===id);
+        const dateCell = tr.querySelector('.cell-date');
+        const pointsCell = tr.querySelector('.cell-points');
+        dateCell.innerHTML = `<input type="date" value="${entry.date||''}">`;
+        pointsCell.innerHTML = `<input type="number" value="${entry.points||0}">`;
+        ev.target.outerHTML = '<button class="wd-rowbtn save-btn">Save</button>';
+        tr.querySelector('.save-btn').addEventListener('click', async ()=>{
+          const newDate = dateCell.querySelector('input').value;
+          const newPoints = Number(pointsCell.querySelector('input').value) || 0;
+          try{
+            await challengeCol().doc(id).update({date:newDate, points:newPoints});
+            loadChallengeData();
+          }catch(e){ alert("Couldn't save — check your connection."); }
+        });
+      });
+    });
   }
+
+  // Collapse/expand the history list
+  let historyExpanded = false;
+  document.getElementById('cp-history-toggle').addEventListener('click', ()=>{
+    historyExpanded = !historyExpanded;
+    const body = document.getElementById('cp-history-body');
+    const toggle = document.getElementById('cp-history-toggle');
+    body.style.display = historyExpanded ? 'block' : 'none';
+    toggle.innerHTML = (historyExpanded ? '▾' : '▸') + ` Logged Entries (<span id="cp-count">${cachedChallengeEntries.length}</span>)`;
+  });
 
   document.getElementById('cp-export').addEventListener('click', ()=>{
     if(cachedChallengeEntries.length===0){
@@ -1131,6 +1199,68 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  });
+
+  // CSV IMPORT — expects columns: Date, Activity, Placed (yes/no, optional)
+  document.getElementById('cp-import-btn').addEventListener('click', ()=>{
+    document.getElementById('cp-import-file').click();
+  });
+
+  function matchActivity(text){
+    if(!text) return null;
+    const norm = text.trim().toLowerCase().replace(/[^a-z]/g,'');
+    return challengeOptions.find(opt=>{
+      const optNorm = opt.label.toLowerCase().replace(/[^a-z]/g,'');
+      const keyNorm = opt.key.toLowerCase();
+      return optNorm === norm || keyNorm === norm || optNorm.includes(norm) || norm.includes(keyNorm);
+    }) || null;
+  }
+
+  document.getElementById('cp-import-file').addEventListener('change', (ev)=>{
+    const file = ev.target.files[0];
+    if(!file) return;
+    const msg = document.getElementById('cp-import-msg');
+    msg.textContent = 'Reading file...';
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results)=>{
+        const rows = results.data;
+        let imported = 0, skipped = 0;
+        const batch = db.batch();
+        rows.forEach(row=>{
+          const dateVal = row.Date || row.date;
+          const activityVal = row.Activity || row.activity || row.Type || row.type;
+          const placedVal = (row.Placed || row.placed || '').toString().trim().toLowerCase();
+          const opt = matchActivity(activityVal);
+          if(!opt || !dateVal){ skipped++; return; }
+          const placed = opt.placeable && (placedVal === 'yes' || placedVal === 'true' || placedVal === 'y');
+          const points = opt.points + (placed ? 5 : 0);
+          const docRef = challengeCol().doc();
+          batch.set(docRef, {
+            type: opt.key,
+            label: opt.label + (placed ? ' (Placed)' : ''),
+            points: points,
+            date: dateVal,
+            loggedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          imported++;
+        });
+        if(imported>0){
+          try{
+            await batch.commit();
+            msg.textContent = `Imported ${imported} entries` + (skipped>0 ? `, skipped ${skipped} (unrecognized activity or missing date).` : '.');
+            loadChallengeData();
+          }catch(e){
+            msg.textContent = 'Import failed — check your connection and try again.';
+          }
+        } else {
+          msg.textContent = `Nothing imported — ${skipped} row(s) skipped. Check your Activity names match: ${challengeOptions.map(o=>o.label).join(', ')}.`;
+        }
+        ev.target.value = '';
+      },
+      error: ()=>{ msg.textContent = 'Could not read that file — make sure it\'s a CSV.'; }
+    });
   });
 })();
 </script>
