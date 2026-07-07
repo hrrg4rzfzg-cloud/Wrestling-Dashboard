@@ -232,6 +232,51 @@
 
   .wd-footnote{padding:16px 22px 26px 22px;color:var(--ink-faint);font-size:11.5px;}
 
+  /* Summer Challenge */
+  .wd-challenge-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+  .wd-challenge-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
+  .wd-challenge-card .label{font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:11px;letter-spacing:.06em;color:var(--ink-faint);margin-bottom:6px;}
+  .wd-challenge-card .value{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--gold-soft);line-height:1;}
+  .wd-challenge-bar{height:10px;background:var(--surface2);border-radius:6px;overflow:hidden;margin:4px 0 18px 0;}
+  .wd-challenge-bar .fill{height:100%;background:linear-gradient(90deg,var(--maroon-bright),var(--gold));border-radius:6px;width:0%;transition:width .4s;}
+
+  .wd-wheel-row{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+  .wd-wheel-wrap{position:relative;height:150px;width:220px;}
+  .wd-wheel{
+    height:150px;overflow-y:scroll;scroll-snap-type:y mandatory;
+    scrollbar-width:none;-ms-overflow-style:none;
+  }
+  .wd-wheel::-webkit-scrollbar{display:none;}
+  .wd-wheel-spacer{height:52px;}
+  .wd-wheel-item{
+    height:46px;display:flex;align-items:center;justify-content:center;gap:6px;
+    scroll-snap-align:center;font-family:'Oswald',sans-serif;text-transform:uppercase;
+    letter-spacing:.03em;font-size:13.5px;color:var(--ink-faint);cursor:pointer;
+    transition:color .15s;
+  }
+  .wd-wheel-item span{font-family:'JetBrains Mono',monospace;font-size:11px;}
+  .wd-wheel-item.selected{color:var(--gold-soft);font-weight:600;font-size:15px;}
+  .wd-wheel-highlight{
+    position:absolute;top:52px;left:0;right:0;height:46px;
+    border-top:1px solid var(--gold);border-bottom:1px solid var(--gold);
+    pointer-events:none;
+  }
+  .wd-wheel-fade-top, .wd-wheel-fade-bottom{
+    position:absolute;left:0;right:0;height:52px;pointer-events:none;z-index:2;
+  }
+  .wd-wheel-fade-top{top:0;background:linear-gradient(var(--surface),transparent);}
+  .wd-wheel-fade-bottom{bottom:0;background:linear-gradient(transparent,var(--surface));}
+  .wd-wheel-side{display:flex;flex-direction:column;gap:10px;min-width:160px;}
+
+  .wd-challenge-history{margin-top:18px;}
+  .wd-challenge-history table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .wd-challenge-history th{
+    text-align:left;font-family:'Oswald',sans-serif;text-transform:uppercase;font-size:10.5px;
+    letter-spacing:.05em;color:var(--ink-faint);padding:6px 8px;border-bottom:1px solid var(--line);
+  }
+  .wd-challenge-history td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;color:var(--ink-muted);}
+  .wd-challenge-history td.labelcell{font-family:'Inter',sans-serif;color:var(--ink);}
+
   @media (max-width:520px){
     .wd-header{padding:16px;}
     .wd-section{padding:16px;}
@@ -417,6 +462,52 @@
     </div>
   </div>
 
+  <!-- SUMMER CHALLENGE -->
+  <div class="wd-section">
+    <div class="wd-eyebrow">Team Summer Challenge</div>
+    <div class="wd-h2" style="margin-top:4px;">Points Tracker</div>
+
+    <div class="wd-challenge-grid">
+      <div class="wd-challenge-card"><div class="label">Total Points</div><div class="value" id="cp-total">0</div></div>
+      <div class="wd-challenge-card"><div class="label">Points Remaining</div><div class="value" id="cp-remaining">1000</div></div>
+      <div class="wd-challenge-card"><div class="label">% Complete</div><div class="value" id="cp-percent">0<span style="font-size:14px;">%</span></div></div>
+    </div>
+    <div class="wd-challenge-bar"><div class="fill" id="cp-bar"></div></div>
+
+    <div class="wd-wheel-row">
+      <div class="wd-wheel-wrap">
+        <div class="wd-wheel-fade-top"></div>
+        <div class="wd-wheel-highlight"></div>
+        <div class="wd-wheel" id="cp-wheel">
+          <div class="wd-wheel-spacer"></div>
+          <!-- items injected by JS -->
+          <div class="wd-wheel-spacer"></div>
+        </div>
+        <div class="wd-wheel-fade-bottom"></div>
+      </div>
+      <div class="wd-wheel-side">
+        <div class="wd-field">
+          <label>Date</label>
+          <input type="date" id="cp-date">
+        </div>
+        <div class="wd-check" id="cp-placed-row" style="display:none;">
+          <input type="checkbox" id="cp-placed">
+          <label for="cp-placed">Placed at this tournament (+5)</label>
+        </div>
+        <button class="wd-btn" id="cp-log-btn">Log It</button>
+        <span class="wd-savemsg" id="cp-savemsg"></span>
+      </div>
+    </div>
+
+    <div class="wd-challenge-history">
+      <div class="wd-h2" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Logged Entries</span>
+        <button class="wd-btn ghost" id="cp-export" style="padding:6px 12px;font-size:10.5px;">Export CSV</button>
+      </div>
+      <div id="cp-history-body"></div>
+    </div>
+  </div>
+
   </div>
   <!-- END MAIN CONTENT -->
 
@@ -466,6 +557,7 @@
       loadToday();
       renderHistory();
       updateStreak();
+      loadChallengeData();
     } else {
       document.getElementById('wd-authgate').style.display = 'block';
       document.getElementById('wd-content').style.display = 'none';
@@ -900,6 +992,146 @@
     document.getElementById('in-apikey').value = rememberedKey;
     document.getElementById('in-apikey-remember').checked = true;
   }
+
+  // SUMMER CHALLENGE — points wheel, totals, history, export
+  const CHALLENGE_GOAL = 1000;
+  const challengeOptions = [
+    {key:'club', label:'Club Membership', points:50},
+    {key:'lift', label:'Weightlifting Workout', points:5},
+    {key:'wrestling', label:'Wrestling Practice', points:5},
+    {key:'tournament', label:'Tournament', points:10, placeable:true},
+    {key:'camp', label:'Camp Day', points:25},
+    {key:'springsport', label:'Spring Sport', points:50},
+    {key:'nationals', label:'Nationals Placement', points:500}
+  ];
+
+  const wheelEl = document.getElementById('cp-wheel');
+  const WHEEL_ITEM_H = 46;
+  let selectedChallengeIndex = 1; // default to something mid-list, not the biggest one
+
+  challengeOptions.forEach((opt,i)=>{
+    const item = document.createElement('div');
+    item.className = 'wd-wheel-item' + (i===selectedChallengeIndex ? ' selected' : '');
+    item.dataset.index = i;
+    item.innerHTML = `${opt.label} <span>+${opt.points}</span>`;
+    item.addEventListener('click', ()=>{
+      wheelEl.scrollTo({top: i*WHEEL_ITEM_H, behavior:'smooth'});
+    });
+    wheelEl.insertBefore(item, wheelEl.lastElementChild);
+  });
+
+  function updateWheelSelection(){
+    const idx = Math.max(0, Math.min(challengeOptions.length-1, Math.round(wheelEl.scrollTop / WHEEL_ITEM_H)));
+    selectedChallengeIndex = idx;
+    Array.from(wheelEl.querySelectorAll('.wd-wheel-item')).forEach((el,i)=>{
+      el.classList.toggle('selected', i===idx);
+    });
+    const placedRow = document.getElementById('cp-placed-row');
+    placedRow.style.display = challengeOptions[idx].placeable ? 'flex' : 'none';
+  }
+
+  let wheelScrollTimer = null;
+  wheelEl.addEventListener('scroll', ()=>{
+    clearTimeout(wheelScrollTimer);
+    wheelScrollTimer = setTimeout(()=>{
+      const idx = Math.max(0, Math.min(challengeOptions.length-1, Math.round(wheelEl.scrollTop / WHEEL_ITEM_H)));
+      wheelEl.scrollTo({top: idx*WHEEL_ITEM_H, behavior:'smooth'});
+      updateWheelSelection();
+    }, 120);
+  });
+
+  // set initial scroll position and date field once laid out
+  setTimeout(()=>{
+    wheelEl.scrollTop = selectedChallengeIndex * WHEEL_ITEM_H;
+    updateWheelSelection();
+  }, 50);
+  document.getElementById('cp-date').value = new Date().toISOString().slice(0,10);
+
+  function challengeCol(){
+    return db.collection('users').doc(currentUser.uid).collection('challenge');
+  }
+
+  document.getElementById('cp-log-btn').addEventListener('click', async ()=>{
+    const msg = document.getElementById('cp-savemsg');
+    const opt = challengeOptions[selectedChallengeIndex];
+    const placed = opt.placeable && document.getElementById('cp-placed').checked;
+    const points = opt.points + (placed ? 5 : 0);
+    const date = document.getElementById('cp-date').value || new Date().toISOString().slice(0,10);
+    const entry = {
+      type: opt.key,
+      label: opt.label + (placed ? ' (Placed)' : ''),
+      points: points,
+      date: date,
+      loggedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    try{
+      await challengeCol().add(entry);
+      msg.textContent = `Logged +${points} pts.`;
+      setTimeout(()=>msg.textContent='',2500);
+      if(document.getElementById('cp-placed')) document.getElementById('cp-placed').checked = false;
+      loadChallengeData();
+    }catch(e){
+      msg.textContent = "Didn't save — check your connection.";
+    }
+  });
+
+  let cachedChallengeEntries = [];
+
+  async function loadChallengeData(){
+    try{
+      const snap = await challengeCol().orderBy('date','desc').get();
+      cachedChallengeEntries = [];
+      snap.forEach(doc=> cachedChallengeEntries.push(Object.assign({id:doc.id}, doc.data())));
+    }catch(e){
+      console.error('loadChallengeData failed', e);
+      cachedChallengeEntries = [];
+    }
+    renderChallengeTotals();
+    renderChallengeHistory();
+  }
+
+  function renderChallengeTotals(){
+    const total = cachedChallengeEntries.reduce((sum,e)=> sum + (Number(e.points)||0), 0);
+    const remaining = Math.max(0, CHALLENGE_GOAL - total);
+    const pct = Math.min(100, Math.round((total/CHALLENGE_GOAL)*100));
+    document.getElementById('cp-total').textContent = total;
+    document.getElementById('cp-remaining').textContent = remaining;
+    document.getElementById('cp-percent').innerHTML = pct + '<span style="font-size:14px;">%</span>';
+    document.getElementById('cp-bar').style.width = pct + '%';
+  }
+
+  function renderChallengeHistory(){
+    const body = document.getElementById('cp-history-body');
+    if(cachedChallengeEntries.length===0){
+      body.innerHTML = '<div class="wd-empty">No entries yet — log something above to get started.</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Date</th><th>Activity</th><th>Points</th></tr></thead><tbody>';
+    cachedChallengeEntries.forEach(e=>{
+      html += `<tr><td>${e.date||'—'}</td><td class="labelcell">${e.label||e.type||'—'}</td><td>${e.points||0}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  }
+
+  document.getElementById('cp-export').addEventListener('click', ()=>{
+    if(cachedChallengeEntries.length===0){
+      alert('No entries to export yet.');
+      return;
+    }
+    const rows = [['Date','Activity','Points']];
+    cachedChallengeEntries.forEach(e=> rows.push([e.date||'', e.label||e.type||'', e.points||0]));
+    const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'summer_challenge_log.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 })();
 </script>
 </body>
