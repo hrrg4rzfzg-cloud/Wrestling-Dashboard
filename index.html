@@ -83,22 +83,6 @@
   .wd-badge.streak .n{color:#fff;}
   .wd-badgerow{display:flex;gap:12px;}
 
-  /* Coach card */
-  .wd-coach{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:16px;
-  }
-  .wd-coach .d{font-size:12.5px;color:var(--ink-muted);margin-bottom:12px;}
-  .wd-coach-out{
-    margin-top:14px;padding:12px 14px;background:var(--bg);border:1px solid var(--line);
-    border-radius:8px;font-size:13.5px;color:var(--ink);line-height:1.55;display:none;
-  }
-  .wd-coach-out.show{display:block;}
-  .wd-coach-loading{color:var(--ink-faint);font-size:12.5px;font-style:italic;display:none;}
-  .wd-coach-loading.show{display:block;}
-  .wd-coach-err{color:var(--maroon-bright);font-size:12.5px;display:none;}
-  .wd-coach-err.show{display:block;}
-
   .wd-btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-muted);}
   .wd-btn.ghost:hover{background:var(--surface2);border-color:var(--gold);color:var(--ink);}
 
@@ -441,26 +425,6 @@
     </div>
   </div>
 
-  <!-- COACH -->
-  <div class="wd-section">
-    <div class="wd-h2">Coach Check-In</div>
-    <div class="wd-coach">
-      <div class="d">Reads your last few logged days (soreness notes, sleep, bodyweight trend, lift/wrestle load) and gives short, practical feedback. Not a doctor or a replacement for your S&C/wrestling coach — if something sounds like an injury, it'll tell you to get it looked at.</div>
-      <div class="wd-field" style="margin-bottom:10px;">
-        <label>Your Anthropic API key</label>
-        <input type="password" id="in-apikey" placeholder="sk-ant-...">
-      </div>
-      <div class="wd-check" style="margin-bottom:12px;">
-        <input type="checkbox" id="in-apikey-remember">
-        <label for="in-apikey-remember">Remember on this device (stored only in this browser — don't check this on a shared computer)</label>
-      </div>
-      <button class="wd-btn" id="wd-coach-btn">Get Feedback</button>
-      <div class="wd-coach-loading" id="wd-coach-loading">Reading your last few days...</div>
-      <div class="wd-coach-err" id="wd-coach-err"></div>
-      <div class="wd-coach-out" id="wd-coach-out"></div>
-    </div>
-  </div>
-
   <!-- RECOVERY -->
   <div class="wd-section">
     <div class="wd-h2">Recovery Rules</div>
@@ -643,9 +607,13 @@
     return '—';
   }
 
+  // Convert JS getDay() (0=Sun..6=Sat) to our array order (0=Mon..6=Sun)
+  const jsDay = new Date().getDay();
+  const todayIndex = (jsDay + 6) % 7;
+
   days.forEach((d,i)=>{
     const cell = document.createElement('div');
-    cell.className = 'wd-day' + (i===0?' active':'');
+    cell.className = 'wd-day' + (i===todayIndex?' active':'');
     cell.innerHTML = `<div class="dow">${d.dow}</div><div class="${matClass(d.kind)}">${matLabel(d.kind)}</div><div class="tag">${d.tag}</div>`;
     cell.addEventListener('click',()=>{
       document.querySelectorAll('.wd-day').forEach(c=>c.classList.remove('active'));
@@ -669,7 +637,7 @@
     }
     detailEl.innerHTML = html;
   }
-  renderDay(0);
+  renderDay(todayIndex);
 
   // NUTRITION TARGETS — defaults, overridden per-user by saved goals
   const defaultGoals = { calories:4300, protein:205, carbs:620, fat:105, water:144, bodyweight:178 };
@@ -905,109 +873,6 @@
       }catch(e){ break; }
     }
     document.getElementById('wd-streak-n').textContent = streak;
-  }
-
-  // COACH — sends recent logs to Claude for short, practical feedback
-  async function getCoachFeedback(){
-    const btn = document.getElementById('wd-coach-btn');
-    const loading = document.getElementById('wd-coach-loading');
-    const out = document.getElementById('wd-coach-out');
-    const err = document.getElementById('wd-coach-err');
-    out.classList.remove('show'); err.classList.remove('show');
-    loading.classList.add('show');
-    btn.disabled = true;
-
-    const recent = [];
-    for(let i=0;i>-5;i--){
-      try{
-        const doc = await userLogsCol().doc(dateStr(i)).get();
-        if(doc.exists){
-          const v = doc.data();
-          const d = new Date(); d.setDate(d.getDate()+i);
-          recent.push(`${d.toISOString().slice(0,10)}: bw=${v.bw||'—'} sleep=${v.sleep||'—'}hrs lift=${v.lift?'yes':'no'} wrestle=${v.wrestle?'yes':'no'} mainlift="${v.mainlift||'—'}" notes="${v.notes||'none'}"`);
-        }
-      }catch(e){}
-    }
-
-    if(recent.length===0){
-      const bw = document.getElementById('in-bw').value;
-      const sleep = document.getElementById('in-sleep').value;
-      const lift = document.getElementById('in-lift').checked;
-      const wrestle = document.getElementById('in-wrestle').checked;
-      const mainlift = document.getElementById('in-mainlift').value;
-      const notes = document.getElementById('in-notes').value;
-      if(bw || sleep || mainlift || notes){
-        recent.push(`today (no saved history — read live from the form): bw=${bw||'—'} sleep=${sleep||'—'}hrs lift=${lift?'yes':'no'} wrestle=${wrestle?'yes':'no'} mainlift="${mainlift||'—'}" notes="${notes||'none'}"`);
-      } else {
-        loading.classList.remove('show');
-        btn.disabled = false;
-        err.textContent = 'Fill in today\'s log above first — the coach needs something to look at.';
-        err.classList.add('show');
-        return;
-      }
-    }
-
-    const apiKey = document.getElementById('in-apikey').value.trim();
-    const remember = document.getElementById('in-apikey-remember').checked;
-    if(remember && apiKey){
-      localStorage.setItem('wd-apikey', apiKey);
-    } else if(!remember){
-      localStorage.removeItem('wd-apikey');
-    }
-    if(!apiKey){
-      loading.classList.remove('show');
-      btn.disabled = false;
-      err.textContent = 'Paste your Anthropic API key above first (get one at console.anthropic.com).';
-      err.classList.add('show');
-      return;
-    }
-
-    const systemPrompt = `You are a blunt, practical strength & conditioning coach for a college-level wrestler in an offseason muscle/strength block (lifting 4x/week, wrestling 5x/week). You'll get a few days of their logged bodyweight, sleep, training completion, main lift, and free-text notes. Give feedback in 3-5 short sentences: call out any real pattern (missed sleep, skipped sessions, notes suggesting overreach or injury), and one concrete thing to do about it. If a note sounds like it could be an injury (sharp pain, joint instability, numbness) rather than normal soreness, clearly say to get it checked by a trainer/doctor instead of giving a workaround. No fluff, no generic pep talk, no markdown formatting.`;
-
-    try{
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true"
-        },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 400,
-          system: systemPrompt,
-          messages: [{ role: "user", content: "Here are my last logged days:\\n" + recent.join("\\n") }]
-        })
-      });
-      const data = await response.json();
-      if(!response.ok){
-        throw new Error((data && data.error && data.error.message) || ('HTTP ' + response.status));
-      }
-      const text = (data.content || []).map(b=>b.text||'').join('\\n').trim();
-      loading.classList.remove('show');
-      btn.disabled = false;
-      if(text){
-        out.textContent = text;
-        out.classList.add('show');
-      } else {
-        err.textContent = 'No response came back — try again in a moment.';
-        err.classList.add('show');
-      }
-    }catch(e){
-      loading.classList.remove('show');
-      btn.disabled = false;
-      err.textContent = 'Could not reach the coach: ' + e.message;
-      err.classList.add('show');
-    }
-  }
-  document.getElementById('wd-coach-btn').addEventListener('click', getCoachFeedback);
-
-  // Prefill remembered API key, if any
-  const rememberedKey = localStorage.getItem('wd-apikey');
-  if(rememberedKey){
-    document.getElementById('in-apikey').value = rememberedKey;
-    document.getElementById('in-apikey-remember').checked = true;
   }
 
   // SUMMER CHALLENGE — points wheel, totals, history, export
