@@ -1201,7 +1201,9 @@
     URL.revokeObjectURL(url);
   });
 
-  // CSV IMPORT — expects columns: Date, Activity, Placed (yes/no, optional)
+  // CSV IMPORT — expects columns: Date, Activity, and ideally Points (or Value).
+  // If a Points/Value column is present, that number is used as-is (custom activity names allowed).
+  // If no Points/Value column, falls back to matching Activity text against the 7 wheel categories.
   document.getElementById('cp-import-btn').addEventListener('click', ()=>{
     document.getElementById('cp-import-file').click();
   });
@@ -1224,22 +1226,40 @@
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: h => h.trim(),
       complete: async (results)=>{
         const rows = results.data;
         let imported = 0, skipped = 0;
         const batch = db.batch();
         rows.forEach(row=>{
-          const dateVal = row.Date || row.date;
-          const activityVal = row.Activity || row.activity || row.Type || row.type;
+          const dateVal = (row.Date || row.date || '').toString().trim();
+          const activityVal = (row.Activity || row.activity || row.Type || row.type || '').toString().trim();
+          const pointsRaw = row.Points ?? row.points ?? row.Value ?? row.value;
           const placedVal = (row.Placed || row.placed || '').toString().trim().toLowerCase();
-          const opt = matchActivity(activityVal);
-          if(!opt || !dateVal){ skipped++; return; }
-          const placed = opt.placeable && (placedVal === 'yes' || placedVal === 'true' || placedVal === 'y');
-          const points = opt.points + (placed ? 5 : 0);
+
+          if(!dateVal || !activityVal){ skipped++; return; }
+
+          let points, label, type;
+          if(pointsRaw !== undefined && pointsRaw !== '' && !isNaN(Number(pointsRaw))){
+            // Trust the sheet's own point value, use activity text as-is for the label
+            points = Number(pointsRaw);
+            label = activityVal;
+            const opt = matchActivity(activityVal);
+            type = opt ? opt.key : 'custom';
+          } else {
+            // No points column — fall back to matching against the 7 known categories
+            const opt = matchActivity(activityVal);
+            if(!opt){ skipped++; return; }
+            const placed = opt.placeable && (placedVal === 'yes' || placedVal === 'true' || placedVal === 'y');
+            points = opt.points + (placed ? 5 : 0);
+            label = opt.label + (placed ? ' (Placed)' : '');
+            type = opt.key;
+          }
+
           const docRef = challengeCol().doc();
           batch.set(docRef, {
-            type: opt.key,
-            label: opt.label + (placed ? ' (Placed)' : ''),
+            type: type,
+            label: label,
             points: points,
             date: dateVal,
             loggedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1249,13 +1269,13 @@
         if(imported>0){
           try{
             await batch.commit();
-            msg.textContent = `Imported ${imported} entries` + (skipped>0 ? `, skipped ${skipped} (unrecognized activity or missing date).` : '.');
+            msg.textContent = `Imported ${imported} entries` + (skipped>0 ? `, skipped ${skipped} (missing date/activity).` : '.');
             loadChallengeData();
           }catch(e){
             msg.textContent = 'Import failed — check your connection and try again.';
           }
         } else {
-          msg.textContent = `Nothing imported — ${skipped} row(s) skipped. Check your Activity names match: ${challengeOptions.map(o=>o.label).join(', ')}.`;
+          msg.textContent = `Nothing imported — ${skipped} row(s) skipped. Make sure your file has Date and Activity columns filled in.`;
         }
         ev.target.value = '';
       },
